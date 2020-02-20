@@ -1,0 +1,317 @@
+---
+title: "Opiod_Cruncher_Backbone_0"
+author: "Saunders"
+date: "8/19/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_libraries, echo = TRUE, warn = FALSE, message=FALSE }
+library(tidyverse)
+library(lubridate)
+library(gridExtra)
+library(R.utils)
+library(igraph)
+library(kableExtra)
+yo <- function(x){x}
+
+
+```
+
+## Opiod Backbone
+
+Let's load the already crunched data file
+
+```{r read_data, warning=FALSE}
+
+## get list of files
+
+directory <- "C:/Users/wisaund/OneDrive - Microsoft/Documents/2019 Data Science/Washington_Post_Opiod_Data/"
+
+## save data
+summary_data <- read_csv(str_c(directory, "summary_data_30_city_year_name.csv"), col_names=TRUE, col_types = "ccccccid")
+
+
+```
+
+
+
+
+
+
+
+##NETWORKS
+
+
+
+
+```{r, echo = FALSE}
+
+
+
+summary_data_store <- summary_data
+
+
+```
+
+
+```{r}
+
+
+summary_data_store -> summary_data
+
+summary_data <- summary_data %>%
+  group_by(REPORTER_STATE, BUYER_STATE) %>%
+  filter(REPORTER_STATE != "GU") %>%
+  filter(BUYER_STATE != "MP") %>%
+  summarize(TOTAL_WT_IN_GM = sum(TOTAL_WT_IN_GM)) %>%
+  arrange(desc(TOTAL_WT_IN_GM)) %>%
+  ungroup() %>%
+  yo
+
+
+sources <- summary_data %>%
+  distinct(REPORTER_STATE) %>%
+  rename(state = REPORTER_STATE) %>%
+  yo
+
+
+destinations <- summary_data %>%
+  distinct(BUYER_STATE) %>%
+  rename(state = BUYER_STATE) %>%
+  yo
+
+nodes <- full_join(sources, destinations, by = "state") %>%
+  mutate(id = row_number()) %>%
+  yo
+
+edges <- summary_data %>%
+  left_join(nodes, by = c("REPORTER_STATE" = "state")) %>%
+  rename(report = id) %>%
+  yo
+
+edges <- edges %>%
+  left_join(nodes, by = c("BUYER_STATE" = "state")) %>%
+  rename(buy = id) %>%
+  yo
+
+edges <- edges %>%
+  select(report, buy, TOTAL_WT_IN_GM) %>%
+  rename(weight = TOTAL_WT_IN_GM) %>%
+  yo
+
+
+  
+
+
+```
+
+
+
+```{r}
+
+# create 
+v_states <- nodes$state
+
+state_tibble <- nodes %>% select(state) %>%
+  mutate(state1 = state)
+
+#state_tibble <- tibble(state = v_states) %>%
+
+big_states<- expand(state_tibble, state, state1) %>%
+  rename(REPORTER_STATE = state, BUYER_STATE = state1) %>%
+  yo
+
+plot_data <- big_states %>% 
+  left_join(summary_data %>% select(REPORTER_STATE, BUYER_STATE, TOTAL_WT_IN_GM), by = c("REPORTER_STATE", "BUYER_STATE"))%>%
+  mutate(TOTAL_WT_IN_GM = ifelse(!is.na(TOTAL_WT_IN_GM), TOTAL_WT_IN_GM, 0)) %>%
+  yo
+
+
+
+```
+
+
+```{r, fig.height=8, fig.width=8, fig.align='center', eval=T}
+
+
+ggplot(plot_data, (aes(x = BUYER_STATE, y = REPORTER_STATE))) + geom_tile(aes(fill = TOTAL_WT_IN_GM/1000), color = "white") + scale_fill_gradient(low = "white", high = "tomato") + 
+  theme_grey() + labs(x = "", y = "") + 
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) + 
+  theme(axis.text.x = element_text(colour = "grey20", size = 9, angle = 90, hjust = 1, vjust = 0.5), 
+        axis.text.y = element_text(colour = "grey20", size = 9))+
+  labs(x = "BUYER_STATE", y = "REPORTER_STATE") + 
+  coord_fixed(ratio = 1) + labs(title = "Nation-wide Distribution Network", subtitle = "Key Distribution Centers Evident ")+
+  theme(legend.position="bottom")
+
+```
+
+A logarithmic view highlights better the extensive network of inter-state sales. 
+
+
+```{r, fig.height=8, fig.width=8, fig.align='center'}
+
+ggplot(plot_data, (aes(x = BUYER_STATE, y = REPORTER_STATE))) + geom_tile(aes(fill = log(TOTAL_WT_IN_GM+1, 10)), color = "white") + 
+  #scale_fill_gradient(low = "white", high = "#9D4561") +
+  scale_fill_gradientn(colours = c("#FFFFFF","#2DB600FF","#63C600FF","#A0D600FF","#E6E600FF","#E8C32EFF","#EBB25EFF", "#EDB48EFF","#F0C9C0FF","tomato")) +
+  theme_grey() + labs(x = "", y = "") + 
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) + 
+  theme(axis.text.x = element_text(colour = "grey20", size = 9, angle = 90, hjust = 1, vjust = 0.5), 
+        axis.text.y = element_text(colour = "grey20", size = 9))+
+  labs(x = "BUYER_STATE", y = "REPORTER_STATE") + 
+  coord_fixed(ratio = 1) + labs(title = "Extensive Distribution Network", subtitle = "note logarithmic scale")+
+  theme(legend.position="bottom")
+
+```
+
+## Network Graph
+
+```{r}
+
+library(network)
+
+```
+
+```{r}
+
+
+## cache summary data
+summary_data_store <- summary_data
+
+
+```
+
+
+```{r}
+
+
+summary_data_store -> summary_data
+
+summary_data <- summary_data %>%
+  group_by(REPORTER_STATE, BUYER_STATE) %>%
+  filter(REPORTER_STATE != "GU") %>%
+  filter(BUYER_STATE != "MP") %>%
+  summarize(TOTAL_WT_IN_GM = sum(TOTAL_WT_IN_GM)) %>%
+  arrange(desc(TOTAL_WT_IN_GM)) %>%
+  ungroup() %>%
+  yo
+
+
+sources <- summary_data %>%
+  distinct(REPORTER_STATE) %>%
+  rename(state = REPORTER_STATE) %>%
+  yo
+
+
+destinations <- summary_data %>%
+  distinct(BUYER_STATE) %>%
+  rename(state = BUYER_STATE) %>%
+  yo
+
+nodes <- full_join(sources, destinations, by = "state") %>%
+  mutate(id = row_number()) %>%
+  yo
+
+edges <- summary_data %>%
+  left_join(nodes, by = c("REPORTER_STATE" = "state")) %>%
+  rename(report = id) %>%
+  yo
+
+edges <- edges %>%
+  left_join(nodes, by = c("BUYER_STATE" = "state")) %>%
+  rename(buy = id) %>%
+  yo
+
+edges <- edges %>%
+  select(report, buy, TOTAL_WT_IN_GM) %>%
+  rename(weight = TOTAL_WT_IN_GM) %>%
+  yo
+
+
+  
+
+
+```
+
+## largest transaction volume
+
+```{r, fig.retina=1, fig.width=9, fig.height=9}
+
+sales_network <- network(summary_data %>% slice(1:80), vertex.attr = nodes, matrix.type = "edgelist", ignore.eval = FALSE, loops = FALSE)
+
+plot(sales_network, vertex.cex = 3, loop.cex = .75, object.scale = 0.01, label.cex = .73, displaylabels = TRUE, vertex.col = rgb(.1,.2,.9))
+
+
+
+
+```
+
+## next level of transaction volume
+
+```{r, fig.retina=1, fig.width=9, fig.height=9}
+
+sales_network <- network(summary_data %>% slice(95:190), vertex.attr = nodes, matrix.type = "edgelist", ignore.eval = FALSE, loops = FALSE)
+
+plot(sales_network, vertex.cex = 3, loop.cex = 2.5, object.scale = 0.01, label.cex = .73, displaylabels = TRUE, col = "blue")
+
+
+
+
+```
+
+## sTATE foCUS
+
+```{r, fig.retina=1, fig.width=9, fig.height=9}
+
+
+sales_network <- network(summary_data %>% filter(REPORTER_STATE == "OH" | REPORTER_STATE == "CA") %>% slice(1:50), vertex.attr = nodes, matrix.type = "edgelist", ignore.eval = FALSE, loops = FALSE)
+
+plot(sales_network, vertex.cex = 3, loop.cex = 2.5, object.scale = 0.01, label.cex = .73, displaylabels = TRUE, vertex.col = rgb(.1,.5,.9))#, mode = "circle")
+
+
+
+```
+## oh AND fl
+
+```{r, fig.retina=1, fig.width=9, fig.height=9}
+
+
+sales_network <- network(summary_data %>% filter(REPORTER_STATE == "OH" | REPORTER_STATE == "FL") %>% slice(1:50), vertex.attr = nodes, matrix.type = "edgelist", ignore.eval = FALSE, loops = FALSE)
+
+plot(sales_network, vertex.cex = 3, loop.cex = 2.5, object.scale = 0.01, label.cex = .73, displaylabels = TRUE, vertex.col = rgb(.8,.2,.9))#, mode = "circle")
+
+
+
+```
+
+
+## REPORTER IL and PA
+
+```{r, fig.retina=1, fig.width=9, fig.height=9}
+
+
+sales_network <- network(summary_data %>% filter(REPORTER_STATE == "PA" | REPORTER_STATE == "IL") %>% slice(1:50), vertex.attr = nodes, matrix.type = "edgelist", ignore.eval = FALSE, loops = FALSE)
+
+plot(sales_network, vertex.cex = 3, loop.cex = 2.5, object.scale = 0.01, label.cex = .77, displaylabels = TRUE, col = "blue")#, mode = "circle")
+```
+
+
+## BUYER OH and FL
+
+```{r, fig.retina=1, fig.width=9, fig.height=9}
+
+
+sales_network <- network(summary_data %>% filter(BUYER_STATE == "AZ" | REPORTER_STATE == "CA") %>% slice(1:40), vertex.attr = nodes, matrix.type = "edgelist", ignore.eval = FALSE, loops = FALSE)
+
+plot(sales_network, vertex.cex = 3, loop.cex = 2.5, object.scale = 0.01, label.cex = .73, displaylabels = TRUE, col = "blue")#, mode = "circle", col = rgb(10, 20, 10))
+```
+
+
+
+
+
